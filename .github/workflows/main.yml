@@ -1,4 +1,4 @@
-name: Build and Publish Joke App
+name: Build, Scan and Publish Joke App
 
 on:
   push:
@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
 
     steps:
       - name: Checkout Repository
@@ -38,6 +39,25 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
+
+      - name: Build locally for scan
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true 
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test-scan'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
